@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const sgMail = require('@sendgrid/mail');
+const sgMail = require('sistemas.lamalapltzcruza@gmail.com');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
