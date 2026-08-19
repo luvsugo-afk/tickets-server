@@ -93,6 +93,11 @@ app.delete('/api/admin/tickets/:id', async (req, res) => {
     }
 });
 
+// Ruta de prueba
+app.get('/', (req, res) => {
+    res.send('✅ Servidor funcionando correctamente');
+});
+
 app.listen(PORT, () => {
     console.log('Servidor funcionando en puerto', PORT);
 });
