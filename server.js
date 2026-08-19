@@ -1,13 +1,10 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
-const sgMail = require('@sendgrid/mail');
+const https = require('https');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Configurar SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 // Conectar a Supabase
 const supabase = createClient(
@@ -18,7 +15,7 @@ const supabase = createClient(
 app.use(cors());
 app.use(express.json());
 
-// Base de conocimiento para prioridades automáticas
+// Prioridades automáticas
 const prioridadAutomatica = {
     'sin-internet': 'Critica',
     'password-bloqueada': 'Critica',
@@ -53,8 +50,39 @@ const prioridadAutomatica = {
     'compra-equipo': 'Baja'
 };
 
+// Función para enviar email
+function enviarEmail(to, subject, htmlContent) {
+    const data = JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: { email: process.env.EMAIL_FROM || 'soporte@empresa.com' },
+        subject: subject,
+        content: [{ type: 'text/html', value: htmlContent }]
+    });
+
+    const options = {
+        hostname: 'api.sendgrid.com',
+        path: '/v3/mail/send',
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${process.env.SENDGRID_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(data)
+        }
+    };
+
+    return new Promise((resolve, reject) => {
+        const req = https.request(options, (res) => {
+            if (res.statusCode === 202) resolve();
+            else reject(new Error(`Status: ${res.statusCode}`));
+        });
+        req.on('error', reject);
+        req.write(data);
+        req.end();
+    });
+}
+
 // ============================================
-// ENDPOINT PÚBLICO: Crear ticket (usuarios)
+// ENDPOINT PÚBLICO: Crear ticket
 // ============================================
 
 app.post('/api/tickets', async (req, res) => {
@@ -77,10 +105,8 @@ app.post('/api/tickets', async (req, res) => {
             return res.status(400).json({ error: 'Faltan datos' });
         }
 
-        // Asignar prioridad automáticamente
         const prioridad = prioridadAutomatica[problema] || 'Media';
         
-        // Construir descripción
         let descripcionCompleta = `Categoría: ${categoria}\n`;
         descripcionCompleta += `Problema: ${titulo_problema}\n\n`;
         descripcionCompleta += `${descripcion_problema}`;
@@ -89,7 +115,6 @@ app.post('/api/tickets', async (req, res) => {
             descripcionCompleta += `\n\nInformación adicional:\n${detalles_extra}`;
         }
 
-        // Guardar en base de datos
         const { data, error } = await supabase
             .from('tickets')
             .insert([{ 
@@ -106,7 +131,7 @@ app.post('/api/tickets', async (req, res) => {
         
         if (error) throw error;
 
-        // Enviar correo de confirmación
+        // Enviar email
         const colores = {
             'Critica': '#ef4444',
             'Alta': '#f97316',
@@ -121,48 +146,42 @@ app.post('/api/tickets', async (req, res) => {
             'Baja': 'Trabajaremos en tu solicitud tan pronto como sea posible.'
         };
 
-        const msg = {
-            to: email,
-            from: process.env.EMAIL_FROM || 'soporte@empresa.com',
-            subject: `Ticket #${data[0].id} recibido - Estamos en ello`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <div style="background: #f3f0ff; border-radius: 16px; padding: 40px; text-align: center;">
-                        <div style="font-size: 48px; margin-bottom: 20px;">💜</div>
-                        <h1 style="color: #7c3aed; margin: 0;">¡Hola, ${solicitante}!</h1>
-                        <p style="color: #6b7280; font-size: 16px; margin-top: 16px;">
-                            Hemos recibido tu solicitud y ya está siendo atendida.
-                        </p>
-                    </div>
-                    
-                    <div style="background: white; border-radius: 12px; padding: 24px; margin-top: 20px; border-left: 4px solid ${colores[prioridad]};">
-                        <h3 style="margin-top: 0; color: #374151; font-size: 14px;">Detalles de tu ticket</h3>
-                        <p style="margin: 8px 0; color: #4b5563;"><strong>Número:</strong> #${data[0].id}</p>
-                        <p style="margin: 8px 0; color: #4b5563;"><strong>Problema:</strong> ${titulo_problema}</p>
-                        <p style="margin: 8px 0; color: #4b5563;">
-                            <strong>Prioridad:</strong> 
-                            <span style="background: ${colores[prioridad]}20; color: ${colores[prioridad]}; padding: 4px 12px; border-radius: 20px; font-weight: bold;">${prioridad}</span>
-                        </p>
-                    </div>
-                    
-                    <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-top: 20px;">
-                        <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                            <strong>¿Qué sigue?</strong><br>
-                            ${mensajes[prioridad]}
-                        </p>
-                    </div>
-                    
-                    <div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">
-                        Este es un correo automático del sistema de tickets.<br>
-                        Equipo de IT
-                    </div>
+        const htmlEmail = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+                <div style="background: #f3f0ff; border-radius: 16px; padding: 40px; text-align: center;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">💜</div>
+                    <h1 style="color: #7c3aed; margin: 0;">¡Hola, ${solicitante}!</h1>
+                    <p style="color: #6b7280; font-size: 16px; margin-top: 16px;">
+                        Hemos recibido tu solicitud y ya está siendo atendida.
+                    </p>
                 </div>
-            `
-        };
+                
+                <div style="background: white; border-radius: 12px; padding: 24px; margin-top: 20px; border-left: 4px solid ${colores[prioridad]};">
+                    <h3 style="margin-top: 0; color: #374151; font-size: 14px;">Detalles de tu ticket</h3>
+                    <p style="margin: 8px 0; color: #4b5563;"><strong>Número:</strong> #${data[0].id}</p>
+                    <p style="margin: 8px 0; color: #4b5563;"><strong>Problema:</strong> ${titulo_problema}</p>
+                    <p style="margin: 8px 0; color: #4b5563;">
+                        <strong>Prioridad:</strong> 
+                        <span style="background: ${colores[prioridad]}20; color: ${colores[prioridad]}; padding: 4px 12px; border-radius: 20px; font-weight: bold;">${prioridad}</span>
+                    </p>
+                </div>
+                
+                <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-top: 20px;">
+                    <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                        <strong>¿Qué sigue?</strong><br>
+                        ${mensajes[prioridad]}
+                    </p>
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">
+                    Este es un correo automático del sistema de tickets.<br>
+                    Equipo de IT
+                </div>
+            </div>
+        `;
 
-        sgMail.send(msg).catch(err => {
-            console.log('Error enviando email:', err.message);
-        });
+        enviarEmail(email, `Ticket #${data[0].id} recibido`, htmlEmail)
+            .catch(err => console.log('Error enviando email:', err.message));
 
         res.json({ 
             exito: true, 
@@ -176,7 +195,7 @@ app.post('/api/tickets', async (req, res) => {
 });
 
 // ============================================
-// ENDPOINTS PRIVADOS (solo IT)
+// ENDPOINTS PRIVADOS (IT)
 // ============================================
 
 const authIT = (req, res, next) => {
@@ -187,7 +206,6 @@ const authIT = (req, res, next) => {
     next();
 };
 
-// Obtener todos los tickets (solo IT)
 app.get('/api/admin/tickets', authIT, async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -211,7 +229,6 @@ app.get('/api/admin/tickets', authIT, async (req, res) => {
     }
 });
 
-// Actualizar estado (solo IT)
 app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
@@ -229,7 +246,6 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
     }
 });
 
-// Eliminar ticket (solo IT)
 app.delete('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
@@ -239,6 +255,10 @@ app.delete('/api/admin/tickets/:id', authIT, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+app.get('/', (req, res) => {
+    res.send('🌸 Servidor de tickets funcionando');
 });
 
 app.listen(PORT, () => {
