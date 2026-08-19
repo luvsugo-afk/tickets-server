@@ -15,12 +15,19 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
-// Configurar CORS para permitir tu dominio de Vercel
-app.use(cors({
-    origin: ['https://tickets-web-ruddy.vercel.app', 'http://localhost:3000'],
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'x-api-key']
-}));
+// SOLUCIÓN ALTERNATIVA: Permitir todos los orígenes
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-api-key');
+    
+    // Manejar preflight requests
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
 
 app.use(express.json());
 
