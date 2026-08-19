@@ -91,8 +91,8 @@ app.post('/api/tickets', async (req, res) => {
         if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
             const colores = { 'Critica': '#ef4444', 'Alta': '#f97316', 'Media': '#eab308', 'Baja': '#22c55e' };
             const mensajes = {
-                'Critica': 'Un técnico se comunicará contigo en los próximos 15 minutos.',
-                'Alta': 'Estimamos atender tu solicitud hoy mismo.',
+                'Critica': 'Me comunicare contigo en los próximos 15 minutos.',
+                'Alta': 'Se estima atender tu solicitud hoy mismo.',
                 'Media': 'Tu ticket será atendido en las próximas 24-48 horas.',
                 'Baja': 'Trabajaremos en tu solicitud tan pronto como sea posible.'
             };
@@ -101,7 +101,7 @@ app.post('/api/tickets', async (req, res) => {
                 to: email,
                 from: process.env.EMAIL_FROM,
                 subject: `Ticket #${data[0].id} recibido - Estamos en ello`,
-                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;"><div style="background: #f3f0ff; border-radius: 16px; padding: 40px; text-align: center;"><div style="font-size: 48px; margin-bottom: 20px;">💜</div><h1 style="color: #7c3aed; margin: 0;">¡Hola, ${solicitante}!</h1><p style="color: #6b7280; font-size: 16px; margin-top: 16px;">Hemos recibido tu solicitud y ya está siendo atendida.</p></div><div style="background: white; border-radius: 12px; padding: 24px; margin-top: 20px; border-left: 4px solid ${colores[prioridad]};"><h3 style="margin-top: 0; color: #374151; font-size: 14px;">Detalles de tu ticket</h3><p style="margin: 8px 0; color: #4b5563;"><strong>Número:</strong> #${data[0].id}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Problema:</strong> ${titulo}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Prioridad:</strong> <span style="background: ${colores[prioridad]}20; color: ${colores[prioridad]}; padding: 4px 12px; border-radius: 20px; font-weight: bold;">${prioridad}</span></p></div><div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-top: 20px;"><p style="margin: 0; color: #6b7280; font-size: 14px;"><strong>¿Qué sigue?</strong><br>${mensajes[prioridad]}</p></div><div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">Este es un correo automático del sistema de tickets.<br>Equipo de IT</div></div>`
+                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;"><div style="background: #f3f0ff; border-radius: 16px; padding: 40px; text-align: center;"><div style="font-size: 48px; margin-bottom: 20px;"></div><h1 style="color: #7c3aed; margin: 0;">¡Hola, ${solicitante}!</h1><p style="color: #6b7280; font-size: 16px; margin-top: 16px;">Se recibido tu solicitud y ya está siendo atendida.</p></div><div style="background: white; border-radius: 12px; padding: 24px; margin-top: 20px; border-left: 4px solid ${colores[prioridad]};"><h3 style="margin-top: 0; color: #374151; font-size: 14px;">Detalles de tu ticket</h3><p style="margin: 8px 0; color: #4b5563;"><strong>Número:</strong> #${data[0].id}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Problema:</strong> ${titulo}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Prioridad:</strong> <span style="background: ${colores[prioridad]}20; color: ${colores[prioridad]}; padding: 4px 12px; border-radius: 20px; font-weight: bold;">${prioridad}</span></p></div><div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-top: 20px;"><p style="margin: 0; color: #6b7280; font-size: 14px;"><strong>¿Qué sigue?</strong><br>${mensajes[prioridad]}</p></div><div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">Este es un correo automático del sistema de tickets.<br>Saludos Ailen</div></div>`
             };
             sgMail.send(msg).catch(err => console.log('Error email:', err.message));
         }
@@ -112,9 +112,6 @@ app.post('/api/tickets', async (req, res) => {
     }
 });
 
-// ============================================
-// RUTAS PRIVADAS (IT)
-// ============================================
 
 app.get('/api/admin/tickets', authIT, async (req, res) => {
     try {
@@ -142,7 +139,7 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
             const msg = {
                 to: ticketData.email,
                 from: process.env.EMAIL_FROM,
-                subject: `✅ Ticket #${id} resuelto`,
+                subject: `Ticket #${id} resuelto`,
                 html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;"><div style="background: #dcfce7; border-radius: 16px; padding: 40px; text-align: center; border: 2px solid #22c55e;"><div style="font-size: 48px; margin-bottom: 20px;">✅</div><h1 style="color: #166534; margin: 0;">¡Tu ticket ha sido resuelto!</h1><p style="color: #15803d; font-size: 16px; margin-top: 16px;">Hola ${ticketData.solicitante}, hemos atendido tu solicitud.</p></div><div style="background: white; border-radius: 12px; padding: 24px; margin-top: 20px; border-left: 4px solid #22c55e;"><h3 style="margin-top: 0; color: #374151; font-size: 14px;">Detalles del ticket resuelto</h3><p style="margin: 8px 0; color: #4b5563;"><strong>Número:</strong> #${id}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Problema:</strong> ${ticketData.titulo}</p><p style="margin: 8px 0; color: #4b5563;"><strong>Estado:</strong> <span style="background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-weight: bold;">RESUELTO</span></p></div><div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">Este es un correo automático del sistema de tickets.<br>Equipo de IT 💜</div></div>`
             };
             sgMail.send(msg).catch(err => console.log('Error:', err.message));
@@ -161,6 +158,9 @@ app.delete('/api/admin/tickets/:id', authIT, async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
+});
+
+app.listen(PORT, () => console.log('Servidor en puerto', PORT));
 });
 
 app.listen(PORT, () => console.log('Servidor en puerto', PORT));
