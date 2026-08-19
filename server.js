@@ -5,14 +5,17 @@ const sgMail = require('@sendgrid/mail');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configurar SendGrid
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// Configurar SendGrid si existe
+if (process.env.SENDGRID_API_KEY) {
+    sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
-// CORS
+// CORS completo para todos los orígenes y métodos
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, x-api-key');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, x-api-key');
+    
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -27,12 +30,31 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
-// Ruta de prueba
+// Middleware de autenticación para IT
+const authIT = (req, res, next) => {
+    const token = req.headers['x-api-key'];
+    
+    if (!process.env.IT_API_KEY) {
+        return res.status(500).json({ error: 'IT_API_KEY no configurado en servidor' });
+    }
+    
+    if (token !== process.env.IT_API_KEY) {
+        return res.status(401).json({ error: 'No autorizado' });
+    }
+    
+    next();
+};
+
+// ============================================
+// RUTAS PÚBLICAS (para usuarios)
+// ============================================
+
+// Health check
 app.get('/', (req, res) => {
     res.send('✅ Servidor funcionando');
 });
 
-// Crear ticket con email
+// Crear ticket con email de confirmación
 app.post('/api/tickets', async (req, res) => {
     try {
         const { titulo, descripcion, solicitante, email, prioridad } = req.body;
@@ -52,7 +74,7 @@ app.post('/api/tickets', async (req, res) => {
         
         if (error) throw error;
 
-        // Enviar email (no bloqueante)
+        // Enviar email de confirmación
         if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
             const colores = {
                 'Critica': '#ef4444',
@@ -120,8 +142,12 @@ app.post('/api/tickets', async (req, res) => {
     }
 });
 
-// Panel IT - ver tickets
-app.get('/api/admin/tickets', async (req, res) => {
+// ============================================
+// RUTAS PRIVADAS (solo IT)
+// ============================================
+
+// Ver todos los tickets
+app.get('/api/admin/tickets', authIT, async (req, res) => {
     try {
         const { data, error } = await supabase
             .from('tickets')
@@ -129,22 +155,32 @@ app.get('/api/admin/tickets', async (req, res) => {
             .order('fecha_creacion', { ascending: false });
         
         if (error) throw error;
+        
+        // Ordenar por prioridad
+        const orden = { 'Critica': 1, 'Alta': 2, 'Media': 3, 'Baja': 4 };
+        data.sort((a, b) => {
+            if (orden[a.prioridad] !== orden[b.prioridad]) {
+                return orden[a.prioridad] - orden[b.prioridad];
+            }
+            return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);
+        });
+        
         res.json(data);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// Cambiar estado (CON AUTENTICACIÓN) + notificación por email
+// Cambiar estado + enviar email de resolución
 app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
         
-        // Obtener datos del ticket antes de actualizar (para tener el email)
+        // Obtener datos del ticket antes de actualizar
         const { data: ticketData, error: ticketError } = await supabase
             .from('tickets')
-            .select('email, solicitante, titulo, estado')
+            .select('email, solicitante, titulo')
             .eq('id', id)
             .single();
         
@@ -158,7 +194,7 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
         
         if (error) throw error;
         
-        // Enviar email de notificación si se resolvió (estado = Cerrado)
+        // Enviar email si se resolvió
         if (estado === 'Cerrado' && ticketData.email && process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
             const msg = {
                 to: ticketData.email,
@@ -204,16 +240,16 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
         res.json({ exito: true, notificado: estado === 'Cerrado' });
         
     } catch (err) {
-        console.log('Error en PUT:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-// Borrar
-app.delete('/api/admin/tickets/:id', async (req, res) => {
+// Eliminar ticket
+app.delete('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
-        await supabase.from('tickets').delete().eq('id', id);
+        const { error } = await supabase.from('tickets').delete().eq('id', id);
+        if (error) throw error;
         res.json({ exito: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
