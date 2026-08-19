@@ -4,7 +4,7 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Permitir CORS
+// CORS
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -17,13 +17,18 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
-// Conectar a Supabase
+// Conectar a Supabase (URL hardcodeada, KEY en variable de entorno)
 const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY
+    'https://icyxaputskgxannjmtqv.supabase.co',  // Tu URL
+    process.env.SUPABASE_KEY  // La key sigue en variable de entorno
 );
 
-// Crear ticket (simple, sin email)
+// Ruta de prueba
+app.get('/', (req, res) => {
+    res.send('✅ Servidor funcionando');
+});
+
+// Crear ticket
 app.post('/api/tickets', async (req, res) => {
     try {
         const { titulo, descripcion, solicitante, email, prioridad } = req.body;
@@ -91,11 +96,6 @@ app.delete('/api/admin/tickets/:id', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
-});
-
-// Ruta de prueba
-app.get('/', (req, res) => {
-    res.send('✅ Servidor funcionando correctamente');
 });
 
 app.listen(PORT, () => {
