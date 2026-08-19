@@ -10,7 +10,7 @@ if (process.env.SENDGRID_API_KEY) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 }
 
-// CORS completo para todos los orígenes y métodos
+// CORS completo
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -30,12 +30,52 @@ const supabase = createClient(
     process.env.SUPABASE_KEY
 );
 
+// Función para notificar por Telegram
+const enviarNotificacionTelegram = async (ticket) => {
+    if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
+    
+    const emojis = {
+        'Critica': '🔴',
+        'Alta': '🟠',
+        'Media': '🟡',
+        'Baja': '🟢'
+    };
+    
+    const mensaje = `
+${emojis[ticket.prioridad] || '🔵'} *NUEVO TICKET #${ticket.id}*
+
+📋 *${ticket.titulo}*
+👤 ${ticket.solicitante}
+✉️ ${ticket.email}
+⚡ Prioridad: ${ticket.prioridad}
+
+📝 ${ticket.descripcion ? ticket.descripcion.substring(0, 100) + '...' : 'Sin descripción'}
+
+🔗 Panel: https://tickets-web-ruddy.vercel.app/admin.html
+    `;
+    
+    try {
+        await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: process.env.TELEGRAM_CHAT_ID,
+                text: mensaje,
+                parse_mode: 'Markdown'
+            })
+        });
+        console.log('✅ Notificación Telegram enviada');
+    } catch (err) {
+        console.log('Error Telegram:', err.message);
+    }
+};
+
 // Middleware de autenticación para IT
 const authIT = (req, res, next) => {
     const token = req.headers['x-api-key'];
     
     if (!process.env.IT_API_KEY) {
-        return res.status(500).json({ error: 'IT_API_KEY no configurado en servidor' });
+        return res.status(500).json({ error: 'IT_API_KEY no configurado' });
     }
     
     if (token !== process.env.IT_API_KEY) {
@@ -46,15 +86,14 @@ const authIT = (req, res, next) => {
 };
 
 // ============================================
-// RUTAS PÚBLICAS (para usuarios)
+// RUTAS PÚBLICAS
 // ============================================
 
-// Health check
 app.get('/', (req, res) => {
     res.send('✅ Servidor funcionando');
 });
 
-// Crear ticket con email de confirmación
+// Crear ticket
 app.post('/api/tickets', async (req, res) => {
     try {
         const { titulo, descripcion, solicitante, email, prioridad } = req.body;
@@ -73,6 +112,9 @@ app.post('/api/tickets', async (req, res) => {
             .select();
         
         if (error) throw error;
+
+        // 🔔 ENVIAR NOTIFICACIÓN A TELEGRAM
+        await enviarNotificacionTelegram(data[0]);
 
         // Enviar email de confirmación
         if (process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
@@ -129,9 +171,7 @@ app.post('/api/tickets', async (req, res) => {
                 `
             };
 
-            sgMail.send(msg).catch(err => {
-                console.log('Error enviando email:', err.message);
-            });
+            sgMail.send(msg).catch(err => console.log('Error email:', err.message));
         }
 
         res.json({ exito: true, ticket: data[0] });
@@ -143,10 +183,9 @@ app.post('/api/tickets', async (req, res) => {
 });
 
 // ============================================
-// RUTAS PRIVADAS (solo IT)
+// RUTAS PRIVADAS (IT)
 // ============================================
 
-// Ver todos los tickets
 app.get('/api/admin/tickets', authIT, async (req, res) => {
     try {
         const { data, error } = await supabase
@@ -156,7 +195,6 @@ app.get('/api/admin/tickets', authIT, async (req, res) => {
         
         if (error) throw error;
         
-        // Ordenar por prioridad
         const orden = { 'Critica': 1, 'Alta': 2, 'Media': 3, 'Baja': 4 };
         data.sort((a, b) => {
             if (orden[a.prioridad] !== orden[b.prioridad]) {
@@ -171,13 +209,11 @@ app.get('/api/admin/tickets', authIT, async (req, res) => {
     }
 });
 
-// Cambiar estado + enviar email de resolución
 app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
         const { estado } = req.body;
         
-        // Obtener datos del ticket antes de actualizar
         const { data: ticketData, error: ticketError } = await supabase
             .from('tickets')
             .select('email, solicitante, titulo')
@@ -186,7 +222,6 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
         
         if (ticketError) throw ticketError;
         
-        // Actualizar estado
         const { error } = await supabase
             .from('tickets')
             .update({ estado })
@@ -194,7 +229,7 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
         
         if (error) throw error;
         
-        // Enviar email si se resolvió
+        // Email de resolución
         if (estado === 'Cerrado' && ticketData.email && process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM) {
             const msg = {
                 to: ticketData.email,
@@ -217,13 +252,6 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
                             <p style="margin: 8px 0; color: #4b5563;"><strong>Estado:</strong> <span style="background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-weight: bold;">RESUELTO</span></p>
                         </div>
                         
-                        <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-top: 20px;">
-                            <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                                <strong>¿Necesitas algo más?</strong><br>
-                                No dudes en crear un nuevo ticket si tienes alguna otra consulta.
-                            </p>
-                        </div>
-                        
                         <div style="text-align: center; margin-top: 30px; color: #9ca3af; font-size: 12px;">
                             Este es un correo automático del sistema de tickets.<br>
                             Equipo de IT 💜
@@ -233,8 +261,8 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
             };
 
             sgMail.send(msg)
-                .then(() => console.log('Email de resolución enviado a:', ticketData.email))
-                .catch(err => console.log('Error enviando email de resolución:', err.message));
+                .then(() => console.log('Email de resolución enviado'))
+                .catch(err => console.log('Error:', err.message));
         }
         
         res.json({ exito: true, notificado: estado === 'Cerrado' });
@@ -244,7 +272,6 @@ app.put('/api/admin/tickets/:id', authIT, async (req, res) => {
     }
 });
 
-// Eliminar ticket
 app.delete('/api/admin/tickets/:id', authIT, async (req, res) => {
     try {
         const { id } = req.params;
