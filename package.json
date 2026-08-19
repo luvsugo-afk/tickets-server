@@ -1,7 +1,6 @@
 {
   "name": "tickets-server",
   "version": "1.0.0",
-  "description": "Servidor para sistema de tickets",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
