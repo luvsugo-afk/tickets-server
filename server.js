@@ -28,13 +28,14 @@ const enviarNotificacionTelegram = async (ticket) => {
     if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
     
     const emojis = { 'Critica': '🔴', 'Alta': '🟠', 'Media': '🟡', 'Baja': '🟢' };
+    
     let detallesExtra = '';
     if (ticket.detalles_extra && ticket.detalles_extra.trim()) {
-        detallesExtra = `\n\nDetalles adicionales:\n${ticket.detalles_extra.substring(0, 200)}`;
+        detallesExtra = `\n\n📝 *Detalles adicionales:*\n${ticket.detalles_extra.substring(0, 200)}${ticket.detalles_extra.length > 200 ? '...' : ''}`;
     }
     
-    const mensaje = `NUEVO TICKET #${ticket.id}\n\n${ticket.titulo}\nSolicitante: ${ticket.solicitante}\nEmail: ${ticket.email}\nPrioridad: ${ticket.prioridad}${detallesExtra}\n\nPanel: https://tickets-web-ruddy.vercel.app/admin.html`;
-    
+    const mensaje = `${emojis[ticket.prioridad] || '🔵'} *NUEVO TICKET #${ticket.id}*\n\n📋 *${ticket.titulo}*\n👤 ${ticket.solicitante}\n✉️ ${ticket.email}\n⚡ Prioridad: ${ticket.prioridad}${detallesExtra}\n\n🔗 Panel: https://tickets-web-ruddy.vercel.app/admin.html`;
+
     try {
         await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST',
