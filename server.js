@@ -112,7 +112,7 @@ app.post('/api/tickets', async (req, res) => {
                         
                         <p>Para consultas o dudas sobre el estado de su ticket, comuníquese al 1157211393.</p>
                         
-                        <p>Atentamente,<br>Departamento de Soporte Técnico</p>
+                        <p>Atentamente,<br>Ailen.</p>
                         
                         <hr style="border: none; border-top: 1px solid #ddd; margin-top: 30px;">
                         <p style="font-size: 12px; color: #666;">Este es un mensaje automático. Por favor no responda a este correo.</p>
