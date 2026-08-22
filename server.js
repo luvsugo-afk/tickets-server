@@ -27,6 +27,7 @@ const supabase = createClient(
 const enviarNotificacionTelegram = async (ticket) => {
     if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
     
+    const emojis = { 'Critica': '🔴', 'Alta': '🟠', 'Media': '🟡', 'Baja': '🟢' };
     let detallesExtra = '';
     if (ticket.detalles_extra && ticket.detalles_extra.trim()) {
         detallesExtra = `\n\nDetalles adicionales:\n${ticket.detalles_extra.substring(0, 200)}`;
